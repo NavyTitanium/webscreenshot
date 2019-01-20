@@ -214,11 +214,14 @@ def entry_format_validator(line):
         if validator:
             return extract_all_matched_named_groups(regex, validator)
 
+def ip2int(addr):
+    return str(struct.unpack("!I", socket.inet_aton(addr))[0])
+
 def save_db(proxy,output_filename):
     try:
         cursor = cnxn.cursor()
         ip, port = proxy.split(":")
-        cursor.execute("INSERT INTO proxies (ipv4,port,screenshot) VALUES ('" + ip2int(ip) + "','" + port + "','" + output_filename + "')")
+        cursor.execute("INSERT INTO proxies (ipv4,port,screenshoot) VALUES ('" + ip2int(ip) + "','" + port + "','" + output_filename + "')")
         cnxn.commit()
     except Exception as ex:
         logging.exception(ex)
