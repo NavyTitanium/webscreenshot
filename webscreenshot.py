@@ -14,6 +14,8 @@ import shlex
 import logging
 import errno
 import pyodbc
+import socket
+import struct
 
 # Script version
 VERSION = '2.2.1'
@@ -221,7 +223,7 @@ def save_db(proxy,output_filename):
     try:
         cursor = cnxn.cursor()
         ip, port = proxy.split(":")
-        cursor.execute("INSERT INTO proxies (ipv4,port,screenshoot) VALUES ('" + ip2int(ip) + "','" + port + "','" + output_filename + "')")
+        cursor.execute("UPDATE proxies SET screenshoot ='" + output_filename + "' WHERE ipv4='" + ip2int(ip) + "' and port ='" + port + "'")
         cnxn.commit()
     except Exception as ex:
         logging.exception(ex)
@@ -370,7 +372,7 @@ def craft_cmd(url_and_options):
     
     execution_retval = shell_exec(url, cmd, options)
     if execution_retval ==0:
-        save_db(just_the_proxy,output_filename)
+        save_db(just_the_proxy,('%s.png' % filter_bad_filename_chars(url)))
 
     return execution_retval, url
 
