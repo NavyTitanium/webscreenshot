@@ -29,8 +29,6 @@ if driver_names:
     try:
         cnxn = pyodbc.connect(
             'DRIVER={' + driver_name + '};SERVER=127.0.0.1;PORT=3306;DATABASE=proxy;USER=root;PASSWORD=somepassword')
-   #     cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
-    #    cnxn.setencoding('utf-8')
     except Exception as ex:
         exit("Please check the DB connection string: " + str(ex))
 else:
