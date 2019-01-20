@@ -1,24 +1,6 @@
 ﻿#!/usr/bin/env python
 # -*- coding: utf-8 -*-
 
-# This file is part of webscreenshot.
-#
-# Copyright (C) 2018, Thomas Debize <tdebize at mail.com>
-# All rights reserved.
-#
-# webscreenshot is free software: you can redistribute it and/or modify
-# it under the terms of the GNU Lesser General Public License as published by
-# the Free Software Foundation, either version 3 of the License, or
-# (at your option) any later version.
-#
-# webscreenshot is distributed in the hope that it will be useful,
-# but WITHOUT ANY WARRANTY; without even the implied warranty of
-# MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.  See the
-# GNU Lesser General Public License for more details.
-#
-# You should have received a copy of the GNU Lesser General Public License
-# along with webscreenshot.  If not, see <http://www.gnu.org/licenses/>.
-
 import re
 import os
 import sys
@@ -31,6 +13,7 @@ import itertools
 import shlex
 import logging
 import errno
+import pyodbc
 
 # Script version
 VERSION = '2.2.1'
@@ -39,11 +22,24 @@ VERSION = '2.2.1'
 from optparse import OptionParser
 from optparse import OptionGroup
 
+# Looks for ODBC drivers that have 'MySQL' in the name
+driver_names = [x for x in pyodbc.drivers() if 'MySQL' in x]
+if driver_names:
+    driver_name = driver_names[0]
+    try:
+        cnxn = pyodbc.connect(
+            'DRIVER={' + driver_name + '};SERVER=127.0.0.1;PORT=3306;DATABASE=proxy;USER=root;PASSWORD=somepassword')
+   #     cnxn.setdecoding(pyodbc.SQL_WCHAR, encoding='utf-8')
+    #    cnxn.setencoding('utf-8')
+    except Exception as ex:
+        exit("Please check the DB connection string: " + str(ex))
+else:
+    exit('No suitable driver found. Cannot connect.')
+
 # Options definition
 parser = OptionParser(usage="usage: %prog [options] URL")
 
 main_grp = OptionGroup(parser, 'Main parameters')
-main_grp.add_option('-i', '--input-file', help = '<INPUT_FILE>: text file containing the target list. Ex: list.txt', nargs = 1)
 main_grp.add_option('-o', '--output-directory', help = '<OUTPUT_DIRECTORY> (optional): screenshots output directory (default \'./screenshots/\')', nargs = 1)
 main_grp.add_option('-r', '--renderer', help = '<RENDERER> (optional): renderer to use among \'phantomjs\' (legacy but best results), \'chrome\', \'chromium\' (version > 57) (default \'phantomjs\')', choices = ['phantomjs', 'chrome', 'chromium'], default = 'phantomjs', nargs = 1)
 main_grp.add_option('-w', '--workers', help = '<WORKERS> (optional): number of parallel execution workers (default 2)', default = 2, nargs = 1)
@@ -224,25 +220,31 @@ def parse_targets(options, arguments):
     """
         Parse list and convert each target to valid URI with port(protocol://foobar:port) 
     """
-    
+    lines = []
+    try:
+        cursor = cnxn.cursor()
+        cursor.execute("SELECT INET_NTOA(ipv4),port from proxies where reason like '200%'")
+        row_count = cursor.rowcount
+        if row_count == 0:
+            logger_gen.warn("No more proxies to test!")
+            sys.exit(0)
+        else:
+            logger_gen.warn("Testing " + str(row_count) + " proxies")
+            for row in cursor.fetchall():
+                proxy=str(row[0])+":"+str(row[1])
+                lines.append(proxy)
+
+    except Exception as ex:
+        logging.exception(ex)
+
     target_list = []
-    
-    if options.input_file != None:    
-        with open(options.input_file,'rb') as fd_input:
-            try:
-                lines = [l.decode('utf-8').lstrip().rstrip().strip() for l in fd_input.readlines()]
-            except UnicodeDecodeError as e:
-                logger_gen.error('Your input file is not UTF-8 encoded, please encode it before using this script')
-                sys.exit(0)
-    else:
-        lines = arguments
-        
-    for index, line in enumerate(lines, start=1):
+
+    for line in lines:
         matches = entry_format_validator(line)
         
         # pass if line can be recognized as a correct input, or if no 'host' group could be found with all the regexes
         if matches == None or not('host' in matches.keys()):
-            logger_gen.warn("Line %s '%s' could not have been recognized as a correct input" % (index, line))
+            logger_gen.warn("Line %s '%s' could not have been recognized as a correct input" % (line))
             pass
         else:
             host = matches['host']
@@ -402,13 +404,7 @@ def main():
         logger_gen.setLevel(options.log_level)
     except :
         parser.error("Please specify a valid log level")
-        
-    if (options.input_file == None and (len(arguments) > 1 or len(arguments) == 0)):
-        parser.error('Please specify a valid input file or a valid URL')
-    
-    if (options.input_file != None and len(arguments) == 1):
-        parser.error('Please specify either an input file or an URL')
-    
+
     if (options.output_directory != None):
         SCREENSHOTS_DIRECTORY = os.path.abspath(os.path.join(os.getcwdu(), options.output_directory))
     
