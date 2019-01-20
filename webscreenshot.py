@@ -214,6 +214,15 @@ def entry_format_validator(line):
         if validator:
             return extract_all_matched_named_groups(regex, validator)
 
+def save_db(proxy,output_filename):
+    try:
+        cursor = cnxn.cursor()
+        ip, port = proxy.split(":")
+        cursor.execute("INSERT INTO proxies (ipv4,port,screenshot) VALUES ('" + ip2int(ip) + "','" + port + "','" + output_filename + "')")
+        cnxn.commit()
+    except Exception as ex:
+        logging.exception(ex)
+
 def parse_targets(options, arguments):
     """
         Parse list and convert each target to valid URI with port(protocol://foobar:port) 
@@ -221,7 +230,7 @@ def parse_targets(options, arguments):
     lines = []
     try:
         cursor = cnxn.cursor()
-        cursor.execute("SELECT INET_NTOA(ipv4),port from proxies where reason like '200%'")
+        cursor.execute("SELECT INET_NTOA(ipv4),port from proxies where reason like '200%' and screenshoot is NULL")
         row_count = cursor.rowcount
         if row_count == 0:
             logger_gen.warn("No more proxies to test!")
@@ -299,9 +308,11 @@ def craft_cmd(url_and_options):
         Craft the correct command with url and options
     """
     global logger_output, PHANTOMJS_BIN, WEBSCREENSHOT_JS, SCREENSHOTS_DIRECTORY, SHELL_EXECUTION_OK, SHELL_EXECUTION_ERROR
-    
+
+
     url, options = url_and_options
-    
+    just_the_proxy = url.split("//")[1]
+
     logger_url = logging.getLogger("%s" % url)
     logger_url.addHandler(logger_output)
     logger_url.setLevel(options.log_level)
@@ -355,7 +366,9 @@ def craft_cmd(url_and_options):
     logger_url.debug("Shell command to be executed\n'%s'\n" % cmd)
     
     execution_retval = shell_exec(url, cmd, options)
-    
+    if execution_retval ==0:
+        save_db(just_the_proxy,output_filename)
+
     return execution_retval, url
 
     
