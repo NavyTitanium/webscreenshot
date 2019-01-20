@@ -373,6 +373,8 @@ def craft_cmd(url_and_options):
     execution_retval = shell_exec(url, cmd, options)
     if execution_retval ==0:
         save_db(just_the_proxy,('%s.png' % filter_bad_filename_chars(url)))
+    else:
+        save_db(just_the_proxy, "FAILED")
 
     return execution_retval, url
 
